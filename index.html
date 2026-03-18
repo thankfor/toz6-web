@@ -7,13 +7,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Tailwind CSS v3 via CDN -->
   <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <!-- PayPal SDK (Sandbox) -->
+  <script src="https://www.paypal.com/sdk/js?client-id=AVqUz5LvyiJfekT_p6hd5wnA4CiYzGRCJg1PumqVNKRUL4IYLDZSLZ5bnTT1kIXJZ5lmedzS_dsOZqV9&currency=USD&enable-funding=venmo,paylater" data-sdk-integration-source="button-factory"></script>
   <!-- Firebase JS SDK v9 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getAuth, signInWithEmailLink, isSignInWithEmailLink, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-
-    // Your web app's Firebase configuration
+    import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
     // Your web app's Firebase configuration
     const firebaseConfig = {
@@ -25,41 +25,38 @@
       appId: "1:884964169243:web:964cf2e9729e91f015cabe"
     };
 
-
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-
-    // Check if we got a sign-in link in the URL
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-      let email = window.localStorage.getItem('emailForSignIn');
-      if (!email) {
-        email = window.prompt('Please provide your email for confirmation');
-      }
-      if (email) {
-        signInWithEmailLink(auth, email, window.location.href)
-          .then((result) => {
-            window.localStorage.removeItem('emailForSignIn');
-            console.log('Sign in successful');
-          })
-          .catch((error) => {
-            console.error('Error signing in:', error);
-          });
-      }
-    }
 
     // Auth state change listener
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         // User is signed in
         const uid = user.uid;
+        console.log('User signed in:', uid);
         // Check if user is Pro from Firestore
         const userDoc = doc(db, "users", uid);
-        const userSnapshot = await getDoc(userDoc);
-        if (userSnapshot.exists()) {
-          window.isPro = userSnapshot.data().isPro || false;
-        } else {
+        console.log('Checking Firestore doc:', userDoc.id);
+        try {
+          const userSnapshot = await getDoc(userDoc);
+          if (userSnapshot.exists()) {
+            const data = userSnapshot.data();
+            console.log('User data from Firestore:', data);
+            window.isPro = data.isPro || false;
+          } else {
+            console.log('User document does not exist in Firestore, creating default document');
+            // Create default user document if not exists
+            await setDoc(userDoc, {
+              email: user.email,
+              isPro: false,
+              createdAt: new Date()
+            });
+            window.isPro = false;
+          }
+        } catch (error) {
+          console.error('Error reading user data from Firestore:', error);
           window.isPro = false;
         }
         window.user = user;
@@ -74,20 +71,42 @@
       }
     });
 
-    // Function to sign in with email link
-    window.signInWithEmail = (email) => {
-      const actionCodeSettings = {
-        url: window.location.href,
-        handleCodeInApp: true,
-      };
-      signInWithEmailLink(auth, email, actionCodeSettings)
-        .then(() => {
-          window.localStorage.setItem('emailForSignIn', email);
-          alert('Check your email for the sign-in link!');
+    // Function to sign out
+    window.signOut = () => {
+      signOut(auth).then(() => {
+        console.log('Sign out successful');
+      }).catch((error) => {
+        console.error('Error signing out:', error);
+      });
+    };
+
+    // Google SSO login function
+    window.signInWithGoogle = () => {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('profile');
+      provider.addScope('email');
+      
+      signInWithPopup(auth, provider)
+        .then((result) => {
+          console.log('Google sign in successful:', result.user.uid);
+          const user = result.user;
+          // Create or update user document in Firestore
+          const userDoc = doc(db, "users", user.uid);
+          setDoc(userDoc, {
+            email: user.email,
+            displayName: user.displayName,
+            isPro: false,
+            createdAt: new Date()
+          }, { merge: true }).then(() => {
+            console.log('User document created/updated in Firestore');
+          }).catch((error) => {
+            console.error('Error creating user document:', error);
+          });
+          alert('Google sign in successful!');
         })
         .catch((error) => {
-          console.error('Error sending sign-in link:', error);
-          alert('Error sending sign-in link. Please try again.');
+          console.error('Error signing in with Google:', error);
+          alert('Google sign in failed: ' + error.message);
         });
     };
 
@@ -98,6 +117,69 @@
       }).catch((error) => {
         console.error('Error signing out:', error);
       });
+    };
+
+    // Function to upgrade to Pro (requires login first)
+    window.upgradeToPro = () => {
+      if (!window.user) {
+        alert(t('pro.loginRequired'));
+        window.signInWithGoogle();
+        return;
+      }
+      // Check if PayPal SDK is loaded
+      if (typeof paypal !== 'undefined') {
+        // Clear previous PayPal buttons and show the modal
+        document.getElementById('modalPaypalButton').innerHTML = '';
+        paypal.Buttons({
+          style: {
+            layout: 'vertical',
+            color: 'blue',
+            shape: 'pill',
+            label: 'pay'
+          },
+          createOrder: function(data, actions) {
+            return actions.order.create({
+              purchase_units: [{
+                description: 'Pro Membership - Unlimited Access',
+                amount: {
+                  value: '9.99',
+                  currency_code: 'USD'
+                }
+              }]
+            });
+          },
+          onApprove: function(data, actions) {
+            return actions.order.capture().then(function(details) {
+              alert(t('pro.paymentSuccess'));
+              console.log('Payment details:', details);
+              // Update user isPro status in Firestore
+              const userDoc = doc(db, "users", window.user.uid);
+              setDoc(userDoc, { 
+                isPro: true,
+                paypalOrderId: data.orderID,
+                paypalEmail: details.payer.email_address,
+                updatedAt: new Date()
+              }, { merge: true }).then(() => {
+                console.log('User Pro status updated in Firestore');
+                document.getElementById('proModal').classList.add('hidden');
+              }).catch((error) => {
+                console.error('Error updating user Pro status:', error);
+              });
+            });
+          },
+          onError: function(err) {
+            console.error('PayPal error:', err);
+            alert(t('pro.paymentFailed') + ': ' + err);
+          },
+          onCancel: function(data) {
+            console.log('Payment cancelled:', data);
+          }
+        }).render('#modalPaypalButton');
+        document.getElementById('proModal').classList.remove('hidden');
+      } else {
+        // Fallback to direct link if PayPal SDK not loaded
+        alert(t('pro.paypalLoading'));
+      }
     };
   </script>
   <script>
@@ -167,8 +249,14 @@
           <div id="authButtons" class="flex items-center gap-2">
             <button id="loginButton"
               class="inline-flex items-center gap-1.5 rounded-full border border-slate-300/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition"
-              onclick="const email = prompt('Enter your email to sign in:'); if (email) window.signInWithEmail(email);">
-              Sign In
+              onclick="window.signInWithGoogle();">
+              <svg class="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Sign in with Google
             </button>
             <button id="logoutButton"
               class="inline-flex items-center gap-1.5 rounded-full border border-slate-300/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition hidden"
@@ -176,15 +264,60 @@
               Sign Out
             </button>
           </div>
-          <a id="proButton" href="https://buy.stripe.com/YOUR_STRIPE_LINK" target="_blank" rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 px-3 py-1.5 text-xs font-semibold text-slate-950 shadow-sm hover:shadow transition">
+          <button id="proButton"
+            class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 px-3 py-1.5 text-xs font-semibold text-slate-950 shadow-sm hover:shadow transition"
+            onclick="window.upgradeToPro();">
             <span data-i18n="pro.button">Upgrade Pro</span>
-            <span class="text-[10px] font-normal bg-slate-950/10 rounded-full px-1.5 py-0.5"
-              data-i18n="pro.unlimitedTag">Unlimited</span>
-          </a>
+            <span class="text-[10px] font-normal bg-slate-950/10 rounded-full px-1.5 py-0.5" data-i18n="pro.unlimitedTag">Unlimited</span>
+          </button>
+          <div id="paypal-button-container" class="hidden"></div>
         </div>
       </div>
     </header>
+
+    <!-- Pro Upgrade Modal -->
+    <div id="proModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100" data-i18n="pro.modalTitle">Upgrade to Pro</h3>
+          <button id="closeModal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proModal').classList.add('hidden')">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div class="bg-slate-100 dark:bg-slate-800 rounded-xl p-4">
+            <h4 class="font-medium text-slate-900 dark:text-slate-100 mb-2" data-i18n="pro.benefitsTitle">Pro Membership Benefits</h4>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+              <li class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+                <span data-i18n="pro.benefit1">Unlimited text transformations</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+                <span data-i18n="pro.benefit2">No usage limits</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+                <span data-i18n="pro.benefit3">Priority support</span>
+              </li>
+            </ul>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-slate-900 dark:text-slate-100" data-i18n="pro.price">$9.99</div>
+            <div class="text-sm text-slate-500 dark:text-slate-400" data-i18n="pro.paymentType">One-time payment</div>
+          </div>
+          <div id="modalPaypalButton" class="mt-4"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- Main -->
     <main class="flex-1">
@@ -412,6 +545,18 @@
           'pro.button': 'Upgrade Pro',
           'pro.unlimitedTag': 'Unlimited',
           'pro.manualUnlock': 'Already paid? Unlock Pro locally',
+          'pro.modalTitle': 'Upgrade to Pro',
+          'pro.benefitsTitle': 'Pro Membership Benefits',
+          'pro.benefit1': 'Unlimited text transformations',
+          'pro.benefit2': 'No usage limits',
+          'pro.benefit3': 'Priority support',
+          'pro.price': '$9.99',
+          'pro.paymentType': 'One-time payment',
+          'pro.loginRequired': 'Please sign in with Google first to upgrade to Pro.',
+          'pro.paymentSuccess': 'Payment successful! Thank you for upgrading to Pro.',
+          'pro.paymentFailed': 'Payment failed',
+          'pro.paymentCancelled': 'Payment cancelled',
+          'pro.paypalLoading': 'PayPal is loading... Please wait a moment and try again.',
           'footer.privacy': 'All text is processed locally in your browser and never uploaded.',
           'status.pro': 'You are using Pro. All features are unlimited.',
           'status.freeUsage': (used, left) => `Used ${used} times today, ${left} left.`,
@@ -467,6 +612,18 @@
           'pro.button': '升级 Pro',
           'pro.unlimitedTag': '无限制',
           'pro.manualUnlock': '已支付？一键解锁 Pro',
+          'pro.modalTitle': '升级到 Pro',
+          'pro.benefitsTitle': 'Pro 会员权益',
+          'pro.benefit1': '无限文本转换',
+          'pro.benefit2': '无使用次数限制',
+          'pro.benefit3': '优先支持',
+          'pro.price': '¥9.99',
+          'pro.paymentType': '一次性支付',
+          'pro.loginRequired': '请先使用 Google 登录以升级到 Pro。',
+          'pro.paymentSuccess': '支付成功！感谢您升级到 Pro。',
+          'pro.paymentFailed': '支付失败',
+          'pro.paymentCancelled': '支付已取消',
+          'pro.paypalLoading': 'PayPal 正在加载... 请稍候再试。',
           'footer.privacy': '文本仅在本地浏览器中处理，不会上传服务器。',
           'status.pro': '您正在使用 Pro 版本，所有功能无限制。',
           'status.freeUsage': (used, left) => `今日已使用 ${used} 次，还可使用 ${left} 次。`,
@@ -522,6 +679,18 @@
           'pro.button': 'Pro にアップグレード',
           'pro.unlimitedTag': '無制限',
           'pro.manualUnlock': 'すでに支払い済み？ローカルで Pro 解放',
+          'pro.modalTitle': 'Pro にアップグレード',
+          'pro.benefitsTitle': 'Pro メンバーシップの特典',
+          'pro.benefit1': '無制限のテキスト変換',
+          'pro.benefit2': '使用回数制限なし',
+          'pro.benefit3': '優先サポート',
+          'pro.price': '¥9.99',
+          'pro.paymentType': '一回限りの支払い',
+          'pro.loginRequired': 'Pro にアップグレードするには、まず Google でサインインしてください。',
+          'pro.paymentSuccess': '支払いが成功しました！Pro にアップグレードしていただきありがとうございます。',
+          'pro.paymentFailed': '支払いに失敗しました',
+          'pro.paymentCancelled': '支払いがキャンセルされました',
+          'pro.paypalLoading': 'PayPal を読み込んでいます... しばらく待ってからもう一度お試しください。',
           'footer.privacy': 'テキストはブラウザ内でのみ処理され、サーバーには送信されません。',
           'status.pro': 'Pro バージョンを使用中です。すべての機能が無制限です。',
           'status.freeUsage': (used, left) => `本日は ${used} 回使用しました。残り ${left} 回です。`,
@@ -584,6 +753,9 @@
           });
         }
       }
+
+      // Expose t function globally for use in other scripts
+      window.t = t;
 
       function setLocale(lang) {
         if (!translations[lang]) return;
