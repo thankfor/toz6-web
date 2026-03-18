@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>文本工具 | Text Tools</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind CSS v3 via CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <!-- Firebase JS SDK v9 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getAuth, signInWithEmailLink, isSignInWithEmailLink, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+    // Your web app's Firebase configuration
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyAXCKDnLHd7qLj7afLBt39Ig8l7lsmcgEU",
+      authDomain: "toz6-5c884.firebaseapp.com",
+      projectId: "toz6-5c884",
+      storageBucket: "toz6-5c884.firebasestorage.app",
+      messagingSenderId: "884964169243",
+      appId: "1:884964169243:web:964cf2e9729e91f015cabe"
+    };
+
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Check if we got a sign-in link in the URL
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      let email = window.localStorage.getItem('emailForSignIn');
+      if (!email) {
+        email = window.prompt('Please provide your email for confirmation');
+      }
+      if (email) {
+        signInWithEmailLink(auth, email, window.location.href)
+          .then((result) => {
+            window.localStorage.removeItem('emailForSignIn');
+            console.log('Sign in successful');
+          })
+          .catch((error) => {
+            console.error('Error signing in:', error);
+          });
+      }
+    }
+
+    // Auth state change listener
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // User is signed in
+        const uid = user.uid;
+        // Check if user is Pro from Firestore
+        const userDoc = doc(db, "users", uid);
+        const userSnapshot = await getDoc(userDoc);
+        if (userSnapshot.exists()) {
+          window.isPro = userSnapshot.data().isPro || false;
+        } else {
+          window.isPro = false;
+        }
+        window.user = user;
+      } else {
+        // User is signed out
+        window.isPro = false;
+        window.user = null;
+      }
+      // Update UI after auth state change
+      if (window.updateUsageUI) {
+        window.updateUsageUI();
+      }
+    });
+
+    // Function to sign in with email link
+    window.signInWithEmail = (email) => {
+      const actionCodeSettings = {
+        url: window.location.href,
+        handleCodeInApp: true,
+      };
+      signInWithEmailLink(auth, email, actionCodeSettings)
+        .then(() => {
+          window.localStorage.setItem('emailForSignIn', email);
+          alert('Check your email for the sign-in link!');
+        })
+        .catch((error) => {
+          console.error('Error sending sign-in link:', error);
+          alert('Error sending sign-in link. Please try again.');
+        });
+    };
+
+    // Function to sign out
+    window.signOut = () => {
+      signOut(auth).then(() => {
+        console.log('Sign out successful');
+      }).catch((error) => {
+        console.error('Error signing out:', error);
+      });
+    };
+  </script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+
+    /* Hide arrows from number inputs (not used but safe) */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased min-h-screen">
+  <div class="min-h-screen flex flex-col">
+    <!-- Top bar -->
+    <header
+      class="border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur">
+      <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <div id="langSwitcher"
+            class="hidden sm:flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-900/70 px-1 py-0.5 text-[10px]">
+            <button data-lang="en"
+              class="lang-btn px-1.5 py-0.5 rounded-full font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 shadow-sm">
+              EN
+            </button>
+            <button data-lang="zh"
+              class="lang-btn px-1.5 py-0.5 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
+              中
+            </button>
+            <button data-lang="ja"
+              class="lang-btn px-1.5 py-0.5 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
+              日
+            </button>
+          </div>
+          <div
+            class="h-7 w-7 rounded-lg bg-gradient-to-tr from-sky-400 to-emerald-400 flex items-center justify-center text-xs font-semibold text-slate-950">
+            T
+          </div>
+          <div>
+            <div class="text-sm font-semibold tracking-tight" data-i18n="appTitle">Minimal Text Tools</div>
+            <div id="planLabel" class="text-[11px] text-slate-400" data-i18n="plan.freeLabel">Free · 10 actions left
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="themeToggle"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300/80 dark:border-slate-700/80 bg-slate-100/80 dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 hover:dark:bg-slate-800 hover:text-amber-500 transition text-xs"
+            aria-label="Toggle theme">
+            🌙
+          </button>
+          <div id="authButtons" class="flex items-center gap-2">
+            <button id="loginButton"
+              class="inline-flex items-center gap-1.5 rounded-full border border-slate-300/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition"
+              onclick="const email = prompt('Enter your email to sign in:'); if (email) window.signInWithEmail(email);">
+              Sign In
+            </button>
+            <button id="logoutButton"
+              class="inline-flex items-center gap-1.5 rounded-full border border-slate-300/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-950/70 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition hidden"
+              onclick="window.signOut()">
+              Sign Out
+            </button>
+          </div>
+          <a id="proButton" href="https://buy.stripe.com/YOUR_STRIPE_LINK" target="_blank" rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 px-3 py-1.5 text-xs font-semibold text-slate-950 shadow-sm hover:shadow transition">
+            <span data-i18n="pro.button">Upgrade Pro</span>
+            <span class="text-[10px] font-normal bg-slate-950/10 rounded-full px-1.5 py-0.5"
+              data-i18n="pro.unlimitedTag">Unlimited</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-1">
+      <div class="max-w-4xl mx-auto px-4 py-5 space-y-4">
+        <!-- Textarea & stats -->
+        <section class="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 items-start">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100"
+                data-i18n="input.title">Input text</h2>
+              <button id="clearButton"
+                class="text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 px-2 py-1 rounded-full border border-slate-300 dark:border-slate-800 hover:border-slate-500 dark:hover:border-slate-600 transition">
+                <span data-i18n="actions.clear">Clear</span>
+              </button>
+            </div>
+            <div class="relative">
+              <textarea id="textInput"
+                class="w-full h-52 sm:h-64 md:h-72 resize-y rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/60 px-3.5 py-3 text-sm leading-relaxed text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-sky-500/70 focus:border-sky-500/70"
+                spellcheck="false" placeholder="Paste or type text here..."></textarea>
+              <div class="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-slate-50/5"></div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div
+              class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/60 p-3.5 space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-xs font-semibold tracking-tight text-slate-900 dark:text-slate-100"
+                  data-i18n="stats.title">Statistics</h3>
+                <span id="usageBadge"
+                  class="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-900/80 px-2 py-0.5 text-[10px] text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
+                  <span data-i18n="stats.remainingPrefix">Remaining</span>
+                  <span id="usageLeft" class="font-semibold text-emerald-300">10</span>
+                  <span data-i18n="stats.remainingSuffix">times</span>
+                </span>
+              </div>
+              <dl class="grid grid-cols-3 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <div
+                  class="flex flex-col rounded-lg bg-slate-100/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 px-2 py-1.5">
+                  <dt class="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                    data-i18n="stats.chars">Chars</dt>
+                  <dd id="charCount" class="text-xs font-semibold mt-0.5">0</dd>
+                </div>
+                <div
+                  class="flex flex-col rounded-lg bg-slate-100/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 px-2 py-1.5">
+                  <dt class="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                    data-i18n="stats.words">Words</dt>
+                  <dd id="wordCount" class="text-xs font-semibold mt-0.5">0</dd>
+                </div>
+                <div
+                  class="flex flex-col rounded-lg bg-slate-100/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 px-2 py-1.5">
+                  <dt class="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500"
+                    data-i18n="stats.lines">Lines</dt>
+                  <dd id="lineCount" class="text-xs font-semibold mt-0.5">0</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div
+              class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/60 p-3.5 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-xs font-semibold tracking-tight text-slate-900 dark:text-slate-100"
+                  data-i18n="random.title">Random text</h3>
+              </div>
+              <div class="space-y-2.5 text-[11px] text-slate-600 dark:text-slate-300">
+                <div class="flex items-center justify-between gap-2">
+                  <label class="flex items-center gap-1.5">
+                    <span class="text-slate-500 dark:text-slate-400" data-i18n="random.length">Length</span>
+                    <span class="text-slate-400 dark:text-slate-500" data-i18n="random.lengthUnit">(chars)</span>
+                  </label>
+                  <input id="randomLength" type="number" min="1" max="2000" value="64"
+                    class="w-20 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 px-2 py-1 text-[11px] text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-sky-500/70 focus:border-sky-500/70" />
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <label
+                    class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-900/80 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer border border-slate-200 dark:border-slate-800">
+                    <input id="charsetLetters" type="checkbox" class="h-3 w-3 rounded border-slate-600 bg-slate-900/80"
+                      checked />
+                    <span data-i18n="random.letters">Letters</span>
+                  </label>
+                  <label
+                    class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-900/80 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer border border-slate-200 dark:border-slate-800">
+                    <input id="charsetNumbers" type="checkbox" class="h-3 w-3 rounded border-slate-600 bg-slate-900/80"
+                      checked />
+                    <span data-i18n="random.numbers">Numbers</span>
+                  </label>
+                  <label
+                    class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-900/80 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer border border-slate-200 dark:border-slate-800">
+                    <input id="charsetSymbols" type="checkbox"
+                      class="h-3 w-3 rounded border-slate-600 bg-slate-900/80" />
+                    <span data-i18n="random.symbols">Symbols</span>
+                  </label>
+                  <label
+                    class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-900/80 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer border border-slate-200 dark:border-slate-800">
+                    <input id="charsetChinese" type="checkbox"
+                      class="h-3 w-3 rounded border-slate-600 bg-slate-900/80" />
+                    <span data-i18n="random.chinese">Common Chinese</span>
+                  </label>
+                </div>
+                <button id="generateRandom"
+                  class="mt-1 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-sky-500/90 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                  <span data-i18n="random.generate">Generate and fill</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Actions -->
+        <section class="space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-xs font-semibold tracking-tight text-slate-900 dark:text-slate-100" data-i18n="tools.title">
+              Text tools</h3>
+            <div id="statusText" class="text-[11px] text-slate-400 line-clamp-1"></div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+            <button data-action="upper"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.upper">UPPERCASE</span>
+            </button>
+            <button data-action="lower"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.lower">lowercase</span>
+            </button>
+            <button data-action="title"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.titleCase">Title Case</span>
+            </button>
+            <button data-action="trim"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.trim">Trim edges</span>
+            </button>
+            <button data-action="strip-all"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.stripAll">Remove all spaces</span>
+            </button>
+            <button data-action="strip-space-newline"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.stripSpaceNewline">Remove spaces & breaks</span>
+            </button>
+            <button data-action="compress-space"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.compressSpace">Collapse spaces</span>
+            </button>
+            <button data-action="compress-lines"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.compressLines">Remove empty lines</span>
+            </button>
+            <button data-action="reverse-text"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.reverseText">Reverse text</span>
+            </button>
+            <button data-action="reverse-lines"
+              class="tool-btn inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/70 px-2.5 py-2 text-[11px] font-medium text-slate-800 dark:text-slate-100 hover:border-sky-500/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition">
+              <span data-i18n="tools.reverseLines">Reverse lines</span>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-500 dark:text-slate-500">
+            <span data-i18n="plan.freeDescription.prefix">Free plan:</span>
+            <span data-i18n="plan.freeDescription.middle">up to</span>
+            <span id="dailyLimitLabel" class="font-semibold text-emerald-300">50</span>
+            <span data-i18n="plan.freeDescription.suffix">actions per day. Upgrade Pro for unlimited.</span>
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200/80 dark:border-slate-900/80 bg-slate-50/90 dark:bg-slate-950/90">
+      <div class="max-w-4xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <p class="text-[10px] text-slate-500 dark:text-slate-500">
+          <span data-i18n="footer.privacy">All text is processed locally in your browser and never uploaded.</span>
+        </p>
+        <div class="flex items-center gap-2 text-[10px] text-slate-500">
+          <button id="proFakeUnlock"
+            class="px-2 py-0.5 rounded-full border border-slate-800 hover:border-emerald-400/80 hover:text-emerald-300 transition">
+            <span data-i18n="pro.manualUnlock">Already paid? Unlock Pro locally</span>
+          </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const DAILY_LIMIT = 50; // 免费版每日总操作次数
+      const STORAGE_KEY = 'text-tools-usage-v1';
+      const THEME_KEY = 'text-tools-theme-v1';
+      const LOCALE_KEY = 'text-tools-locale-v1';
+
+      const translations = {
+        en: {
+          appTitle: 'Minimal Text Tools',
+          'plan.freeLabel': 'Free · 10 actions left',
+          'plan.freeDescription.prefix': 'Free plan:',
+          'plan.freeDescription.middle': 'up to',
+          'plan.freeDescription.suffix': 'actions per day. Upgrade Pro for unlimited.',
+          'stats.title': 'Statistics',
+          'stats.remainingPrefix': 'Remaining',
+          'stats.remainingSuffix': 'times',
+          'stats.chars': 'Chars',
+          'stats.words': 'Words',
+          'stats.lines': 'Lines',
+          'input.title': 'Input text',
+          'actions.clear': 'Clear',
+          'random.title': 'Random text',
+          'random.length': 'Length',
+          'random.lengthUnit': '(chars)',
+          'random.letters': 'Letters',
+          'random.numbers': 'Numbers',
+          'random.symbols': 'Symbols',
+          'random.chinese': 'Common Chinese',
+          'random.generate': 'Generate and fill',
+          'tools.title': 'Text tools',
+          'tools.upper': 'UPPERCASE',
+          'tools.lower': 'lowercase',
+          'tools.titleCase': 'Title Case',
+          'tools.trim': 'Trim edges',
+          'tools.stripAll': 'Remove all spaces',
+          'tools.stripSpaceNewline': 'Remove spaces & breaks',
+          'tools.compressSpace': 'Collapse spaces',
+          'tools.compressLines': 'Remove empty lines',
+          'tools.reverseText': 'Reverse text',
+          'tools.reverseLines': 'Reverse lines',
+          'pro.button': 'Upgrade Pro',
+          'pro.unlimitedTag': 'Unlimited',
+          'pro.manualUnlock': 'Already paid? Unlock Pro locally',
+          'footer.privacy': 'All text is processed locally in your browser and never uploaded.',
+          'status.pro': 'You are using Pro. All features are unlimited.',
+          'status.freeUsage': (used, left) => `Used ${used} times today, ${left} left.`,
+          'status.exhausted': 'Today\'s free quota is used up. Upgrade Pro for unlimited use.',
+          'status.cleared': 'Content cleared.',
+          'status.toUpper': 'Converted to UPPERCASE.',
+          'status.toLower': 'Converted to lowercase.',
+          'status.toTitle': 'Converted to Title Case.',
+          'status.trim': 'Trimmed leading and trailing whitespace.',
+          'status.stripAll': 'Removed all whitespace.',
+          'status.stripSpaceNewline': 'Removed spaces and line breaks.',
+          'status.compressSpace': 'Collapsed consecutive spaces into a single one.',
+          'status.compressLines': 'Removed empty lines.',
+          'status.reverseText': 'Reversed text by characters.',
+          'status.reverseLines': 'Reversed text by lines.',
+          'status.randomGenerated': (len) => `Generated random text of ${len} characters.`,
+          'status.proUnlocked': 'Pro unlocked locally. Effective only in this browser.',
+          'plan.proLabel': 'Pro · Unlimited',
+        },
+        zh: {
+          appTitle: '极简文本工具',
+          'plan.freeLabel': '免费版 · 剩余 10 次操作',
+          'plan.freeDescription.prefix': '免费版每天可使用',
+          'plan.freeDescription.middle': '',
+          'plan.freeDescription.suffix': '次文本操作与生成，升级 Pro 即可无限使用。',
+          'stats.title': '统计信息',
+          'stats.remainingPrefix': '剩余',
+          'stats.remainingSuffix': '次',
+          'stats.chars': '字符',
+          'stats.words': '字词',
+          'stats.lines': '行数',
+          'input.title': '输入文本',
+          'actions.clear': '清空',
+          'random.title': '随机文本生成',
+          'random.length': '长度',
+          'random.lengthUnit': '(字符)',
+          'random.letters': '字母',
+          'random.numbers': '数字',
+          'random.symbols': '符号',
+          'random.chinese': '常用汉字',
+          'random.generate': '生成并填充到文本框',
+          'tools.title': '文本操作',
+          'tools.upper': '全部大写',
+          'tools.lower': '全部小写',
+          'tools.titleCase': '单词首字母大写',
+          'tools.trim': '去除首尾空白',
+          'tools.stripAll': '删除全部空格',
+          'tools.stripSpaceNewline': '删除空格和换行',
+          'tools.compressSpace': '合并连续空格',
+          'tools.compressLines': '移除空行',
+          'tools.reverseText': '文本反转',
+          'tools.reverseLines': '行顺序反转',
+          'pro.button': '升级 Pro',
+          'pro.unlimitedTag': '无限制',
+          'pro.manualUnlock': '已支付？一键解锁 Pro',
+          'footer.privacy': '文本仅在本地浏览器中处理，不会上传服务器。',
+          'status.pro': '您正在使用 Pro 版本，所有功能无限制。',
+          'status.freeUsage': (used, left) => `今日已使用 ${used} 次，还可使用 ${left} 次。`,
+          'status.exhausted': '今日免费额度已用完，升级 Pro 解锁无限使用。',
+          'status.cleared': '内容已清空。',
+          'status.toUpper': '已转换为大写。',
+          'status.toLower': '已转换为小写。',
+          'status.toTitle': '已转换为单词首字母大写形式。',
+          'status.trim': '已去除首尾空白字符。',
+          'status.stripAll': '已删除所有空白字符。',
+          'status.stripSpaceNewline': '已删除空格与换行。',
+          'status.compressSpace': '已合并连续空格为单个空格。',
+          'status.compressLines': '已移除空行。',
+          'status.reverseText': '已按字符反转文本。',
+          'status.reverseLines': '已按行反转文本顺序。',
+          'status.randomGenerated': (len) => `已生成 ${len} 个字符的随机文本。`,
+          'status.proUnlocked': '已手动解锁 Pro。本操作仅在当前浏览器生效。',
+          'plan.proLabel': 'Pro 高级版 · 已解锁无限功能',
+        },
+        ja: {
+          appTitle: 'ミニマルテキストツール',
+          'plan.freeLabel': '無料版 · 残り 10 回',
+          'plan.freeDescription.prefix': '無料プランでは',
+          'plan.freeDescription.middle': '1 日最大',
+          'plan.freeDescription.suffix': '回まで使用できます。Pro にアップグレードすると無制限になります。',
+          'stats.title': '統計情報',
+          'stats.remainingPrefix': '残り',
+          'stats.remainingSuffix': '回',
+          'stats.chars': '文字数',
+          'stats.words': '単語数',
+          'stats.lines': '行数',
+          'input.title': 'テキスト入力',
+          'actions.clear': 'クリア',
+          'random.title': 'ランダムテキスト生成',
+          'random.length': '長さ',
+          'random.lengthUnit': '(文字)',
+          'random.letters': '英字',
+          'random.numbers': '数字',
+          'random.symbols': '記号',
+          'random.chinese': '中国語文字',
+          'random.generate': '生成してテキストに挿入',
+          'tools.title': 'テキスト操作',
+          'tools.upper': 'すべて大文字',
+          'tools.lower': 'すべて小文字',
+          'tools.titleCase': '単語の先頭を大文字',
+          'tools.trim': '前後の空白を削除',
+          'tools.stripAll': 'すべての空白を削除',
+          'tools.stripSpaceNewline': '空白と改行を削除',
+          'tools.compressSpace': '連続した空白を 1 つに',
+          'tools.compressLines': '空行を削除',
+          'tools.reverseText': 'テキストを反転',
+          'tools.reverseLines': '行の順序を反転',
+          'pro.button': 'Pro にアップグレード',
+          'pro.unlimitedTag': '無制限',
+          'pro.manualUnlock': 'すでに支払い済み？ローカルで Pro 解放',
+          'footer.privacy': 'テキストはブラウザ内でのみ処理され、サーバーには送信されません。',
+          'status.pro': 'Pro バージョンを使用中です。すべての機能が無制限です。',
+          'status.freeUsage': (used, left) => `本日は ${used} 回使用しました。残り ${left} 回です。`,
+          'status.exhausted': '本日の無料利用回数は上限に達しました。Pro にアップグレードすると無制限になります。',
+          'status.cleared': '内容をクリアしました。',
+          'status.toUpper': 'すべて大文字に変換しました。',
+          'status.toLower': 'すべて小文字に変換しました。',
+          'status.toTitle': '単語の先頭を大文字に変換しました。',
+          'status.trim': '前後の空白を削除しました。',
+          'status.stripAll': 'すべての空白を削除しました。',
+          'status.stripSpaceNewline': '空白と改行を削除しました。',
+          'status.compressSpace': '連続した空白を 1 つにまとめました。',
+          'status.compressLines': '空行を削除しました。',
+          'status.reverseText': '文字単位でテキストを反転しました。',
+          'status.reverseLines': '行単位でテキストを反転しました。',
+          'status.randomGenerated': (len) => `${len} 文字のランダムテキストを生成しました。`,
+          'status.proUnlocked': 'ローカルで Pro を解放しました。このブラウザでのみ有効です。',
+          'plan.proLabel': 'Pro · 無制限',
+        },
+      };
+
+      function detectInitialLocale() {
+        try {
+          const stored = localStorage.getItem(LOCALE_KEY);
+          if (stored && translations[stored]) return stored;
+        } catch (e) { }
+        // 默认使用英文
+        return 'en';
+      }
+
+      let currentLocale = detectInitialLocale();
+
+      function t(key, ...args) {
+        const dict = translations[currentLocale] || translations.en;
+        const value = dict[key] ?? translations.en[key] ?? key;
+        if (typeof value === 'function') {
+          return value(...args);
+        }
+        return value;
+      }
+
+      function applyTranslations() {
+        document.documentElement.lang = currentLocale === 'zh' ? 'zh-CN' : currentLocale === 'ja' ? 'ja' : 'en';
+        document.querySelectorAll('[data-i18n]').forEach((el) => {
+          const key = el.getAttribute('data-i18n');
+          if (!key) return;
+          el.textContent = t(key);
+        });
+
+        const langButtons = document.querySelectorAll('.lang-btn');
+        if (langButtons && langButtons.length) {
+          langButtons.forEach((btn) => {
+            const lang = btn.getAttribute('data-lang');
+            if (lang === currentLocale) {
+              btn.classList.add('font-medium', 'text-slate-700', 'dark:text-slate-200', 'bg-white', 'dark:bg-slate-800', 'shadow-sm');
+            } else {
+              btn.classList.remove('font-medium', 'bg-white', 'dark:bg-slate-800', 'shadow-sm');
+              btn.classList.add('text-slate-500', 'dark:text-slate-400');
+            }
+          });
+        }
+      }
+
+      function setLocale(lang) {
+        if (!translations[lang]) return;
+        currentLocale = lang;
+        try {
+          localStorage.setItem(LOCALE_KEY, lang);
+        } catch (e) { }
+        applyTranslations();
+        updateUsageUI();
+      }
+
+      const textInput = document.getElementById('textInput');
+      const charCountEl = document.getElementById('charCount');
+      const wordCountEl = document.getElementById('wordCount');
+      const lineCountEl = document.getElementById('lineCount');
+      const usageLeftEl = document.getElementById('usageLeft');
+      const usageBadge = document.getElementById('usageBadge');
+      const planLabel = document.getElementById('planLabel');
+      const statusText = document.getElementById('statusText');
+      const themeToggle = document.getElementById('themeToggle');
+      const clearButton = document.getElementById('clearButton');
+      const randomLengthInput = document.getElementById('randomLength');
+      const charsetLetters = document.getElementById('charsetLetters');
+      const charsetNumbers = document.getElementById('charsetNumbers');
+      const charsetSymbols = document.getElementById('charsetSymbols');
+      const charsetChinese = document.getElementById('charsetChinese');
+      const generateRandomBtn = document.getElementById('generateRandom');
+      const proFakeUnlock = document.getElementById('proFakeUnlock');
+      const dailyLimitLabel = document.getElementById('dailyLimitLabel');
+
+      let usage = {
+        date: null,
+        count: 0,
+      };
+
+      function loadUsage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const today = new Date().toISOString().slice(0, 10);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.date === today) {
+              usage = parsed;
+            } else {
+              usage = { date: today, count: 0 };
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(usage));
+            }
+          } else {
+            usage.date = today;
+            usage.count = 0;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(usage));
+          }
+        } catch (e) {
+          usage = { date: null, count: 0 };
+        }
+      }
+
+      function saveUsage() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(usage));
+        } catch (e) { }
+      }
+
+      // Get isPro from window (set by Firebase auth listener)
+      function getIsPro() {
+        return window.isPro || false;
+      }
+
+      // Update auth UI based on user state
+      function updateAuthUI() {
+        const loginButton = document.getElementById('loginButton');
+        const logoutButton = document.getElementById('logoutButton');
+        if (window.user) {
+          // User is signed in
+          if (loginButton) loginButton.classList.add('hidden');
+          if (logoutButton) logoutButton.classList.remove('hidden');
+        } else {
+          // User is signed out
+          if (loginButton) loginButton.classList.remove('hidden');
+          if (logoutButton) logoutButton.classList.add('hidden');
+        }
+      }
+
+      function loadTheme() {
+        try {
+          const raw = localStorage.getItem(THEME_KEY);
+          const root = document.documentElement;
+          if (raw === 'light') {
+            root.classList.remove('dark');
+            themeToggle.textContent = '☀️';
+          } else if (raw === 'dark') {
+            root.classList.add('dark');
+            themeToggle.textContent = '🌙';
+          } else {
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (prefersDark) {
+              root.classList.add('dark');
+              themeToggle.textContent = '🌙';
+            } else {
+              root.classList.remove('dark');
+              themeToggle.textContent = '☀️';
+            }
+          }
+        } catch (e) { }
+      }
+
+      function toggleTheme() {
+        const root = document.documentElement;
+        const isDark = root.classList.toggle('dark');
+        themeToggle.textContent = isDark ? '🌙' : '☀️';
+        try {
+          localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+        } catch (e) { }
+      }
+
+      function updateStats() {
+        const value = textInput.value || '';
+        const chars = value.length;
+        const words = value.trim()
+          ? value
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean).length
+          : 0;
+        const lines = value.length ? value.split(/\r\n|\r|\n/).length : 0;
+
+        charCountEl.textContent = chars;
+        wordCountEl.textContent = words;
+        lineCountEl.textContent = lines;
+      }
+
+      function updateUsageUI() {
+        dailyLimitLabel.textContent = DAILY_LIMIT;
+        const isPro = getIsPro();
+        if (isPro) {
+          usageLeftEl.textContent = '∞';
+          usageBadge.classList.remove('border-emerald-500/80', 'bg-emerald-950/70', 'text-emerald-200');
+          usageBadge.classList.add('border-amber-400/70', 'bg-amber-950/40', 'text-amber-200');
+          usageBadge.innerHTML = 'Pro&nbsp;' + t('pro.unlimitedTag');
+          planLabel.textContent = t('plan.proLabel');
+          statusText.textContent = t('status.pro');
+          setToolButtonsDisabled(false);
+        } else {
+          const left = Math.max(DAILY_LIMIT - usage.count, 0);
+          usageLeftEl.textContent = left;
+          usageBadge.classList.remove('border-amber-400/70', 'bg-amber-950/40', 'text-amber-200');
+          usageBadge.classList.add('border-slate-800', 'bg-slate-900/80', 'text-slate-300');
+          planLabel.textContent = t('plan.freeLabel').replace('10', String(left));
+          if (left === 0) {
+            statusText.textContent = t('status.exhausted');
+            setToolButtonsDisabled(true);
+          } else {
+            statusText.textContent = t('status.freeUsage', usage.count, left);
+            setToolButtonsDisabled(false);
+          }
+        }
+        updateAuthUI();
+      }
+
+      function setToolButtonsDisabled(disabled) {
+        const buttons = document.querySelectorAll('.tool-btn, #generateRandom');
+        buttons.forEach((btn) => {
+          btn.disabled = disabled;
+        });
+      }
+
+      function canUseFeature() {
+        const isPro = getIsPro();
+        if (isPro) return true;
+        if (usage.count >= DAILY_LIMIT) {
+          updateUsageUI();
+          blink(statusText);
+          return false;
+        }
+        usage.count += 1;
+        saveUsage();
+        updateUsageUI();
+        return true;
+      }
+
+      function blink(el) {
+        if (!el) return;
+        el.classList.add('text-amber-300');
+        setTimeout(() => el.classList.remove('text-amber-300'), 600);
+      }
+
+      function transformText(action) {
+        if (!canUseFeature()) return;
+        const value = textInput.value || '';
+        let result = value;
+
+        switch (action) {
+          case 'upper':
+            result = value.toUpperCase();
+            statusText.textContent = t('status.toUpper');
+            break;
+          case 'lower':
+            result = value.toLowerCase();
+            statusText.textContent = t('status.toLower');
+            break;
+          case 'title':
+            result = value.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+            statusText.textContent = t('status.toTitle');
+            break;
+          case 'trim':
+            result = value.trim();
+            statusText.textContent = t('status.trim');
+            break;
+          case 'strip-all':
+            result = value.replace(/\s+/g, '');
+            statusText.textContent = t('status.stripAll');
+            break;
+          case 'strip-space-newline':
+            result = value.replace(/[ \t\r\n]+/g, '');
+            statusText.textContent = t('status.stripSpaceNewline');
+            break;
+          case 'compress-space':
+            result = value.replace(/[ \t]+/g, ' ');
+            statusText.textContent = t('status.compressSpace');
+            break;
+          case 'compress-lines':
+            result = value
+              .split(/\r\n|\r|\n/)
+              .filter((line) => line.trim().length > 0)
+              .join('\n');
+            statusText.textContent = t('status.compressLines');
+            break;
+          case 'reverse-text':
+            result = Array.from(value).reverse().join('');
+            statusText.textContent = t('status.reverseText');
+            break;
+          case 'reverse-lines':
+            result = value.split(/\r\n|\r|\n/).reverse().join('\n');
+            statusText.textContent = t('status.reverseLines');
+            break;
+        }
+
+        textInput.value = result;
+        updateStats();
+      }
+
+      function generateRandomText() {
+        if (!canUseFeature()) return;
+        let length = parseInt(randomLengthInput.value, 10);
+        if (isNaN(length) || length <= 0) length = 64;
+        length = Math.min(length, 2000);
+
+        let charset = '';
+        if (charsetLetters.checked) charset += 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        if (charsetNumbers.checked) charset += '0123456789';
+        if (charsetSymbols.checked) charset += '!@#$%^&*()-_=+[]{};:,.<>/?';
+        if (charsetChinese.checked) charset += '的一是在不了有和人这中大为上个国我以要他时来用们生到作地于出就分对成会可主发年动同工也能下过子说产种面而方后多定行学法所民得经十三之进着等部度家电力里如水化高自二理起小物现实加量都两体制机当使点从业本去把性好应开它合还因由其些然前外天政四日那社义事平形相全表间样与关各重新线内数正心反你明看原又么利比或但质气第向道命此变条只没结解问意建月公无系军很情者最立代想已通并提直题党程展五果料象员革位入常文总次品式活设及管特件长求老头基资边流路级少图山统接知较将组见计别她手角期根论运农指几九区强放决西被干做必战先回则任取据处队南给色光门即保治北造百规热领七海口东导器压志世金增争济阶油思术极交受联什认六共权收证改清己美再采转更单风切打白教速花带安场身车例真务具万每目至达走积示议声报斗完量型期式';
+        if (!charset) {
+          charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        }
+
+        let result = '';
+        const array = new Uint32Array(length);
+        if (window.crypto && window.crypto.getRandomValues) {
+          window.crypto.getRandomValues(array);
+          for (let i = 0; i < length; i++) {
+            const idx = array[i] % charset.length;
+            result += charset.charAt(idx);
+          }
+        } else {
+          for (let i = 0; i < length; i++) {
+            const idx = Math.floor(Math.random() * charset.length);
+            result += charset.charAt(idx);
+          }
+        }
+
+        textInput.value = result;
+        updateStats();
+        statusText.textContent = t('status.randomGenerated', length);
+      }
+
+      function initEvents() {
+        textInput.addEventListener('input', updateStats);
+
+        document.querySelectorAll('.tool-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const action = btn.getAttribute('data-action');
+            transformText(action);
+          });
+        });
+
+        generateRandomBtn.addEventListener('click', generateRandomText);
+
+        clearButton.addEventListener('click', () => {
+          textInput.value = '';
+          updateStats();
+          statusText.textContent = t('status.cleared');
+        });
+
+        themeToggle.addEventListener('click', toggleTheme);
+
+
+
+        const langButtons = document.querySelectorAll('.lang-btn');
+        if (langButtons && langButtons.length) {
+          langButtons.forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const lang = btn.getAttribute('data-lang');
+              setLocale(lang);
+            });
+          });
+        }
+      }
+
+      loadUsage();
+      applyTranslations();
+      loadTheme();
+      updateStats();
+      updateUsageUI();
+      initEvents();
+
+      // Expose updateUsageUI to window for Firebase auth listener
+      window.updateUsageUI = updateUsageUI;
+    })();
+  </script>
+</body>
+
+</html>
